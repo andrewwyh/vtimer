@@ -7,35 +7,44 @@
 
 // next two lines for SdFat
 #include <SdFat.h>
-SdFat SD;
 
 #define CS_PIN 4
 unsigned char relayPin = 5;
 bool gong;
 bool manual_gong;
+bool manual_gong_debounce;
 bool is_clock_adjusted;
 unsigned long manual_gong_time;
 #define MANUAL_GONG_DURATION 10000 //miliseconds for Manual Gong
 
-File file;
-
-//************************************//
 LiquidCrystal_I2C lcd(0x27,20,4); // Display  I2C 20 x 
 RTC_DS1307 RTC;
 
-#define ARRAYSIZE 5  //how many courses are defined. Currently set to 5
-
 /* Define an array of all available courses, as well as the length for each course type */
+/*
+char course_type[ARRAYSIZE][20]=
+{   "Between Crs",
+    "10-Day",
+    "3-Day",
+    "Satipatthana",
+    "20-Day",
+    "30-Day",
+};
+
+
+int course_length[ARRAYSIZE] = {1,12,4,10,22,32};
+*/
+
+#define ARRAYSIZE 4  //how many courses are defined.
 
 char course_type[ARRAYSIZE][20]=
 {   "Between Crs",
     "10-Day",
     "3-Day",
-    "1-Day",
-    "Satipatthana"
+    "Satipatthana",
 };
 
-int course_length[ARRAYSIZE] = {1,12,4,1,10};
+int course_length[ARRAYSIZE] = {1,12,4,10};
 
 int current_day=0;
 int current_course=0;
@@ -46,13 +55,15 @@ int UP=7; // Button +
 int DOWN=8; // Button -
 int MANUAL_GONG=9; // manual gong
 
-//************Variables**************//
 int hourupg;
 int minupg;
 
 int menu =0;
 
 int timer_data[5];
+int next_timer_hour;
+int next_timer_minute;
+bool next_timer_available;
 
 DateTime now;
 
@@ -72,14 +83,7 @@ void setup()
   Serial.begin(9600);
   Wire.begin();
   RTC.begin();
-   
-  // Initialize the SD card
-  //if (!SD.begin(CS_PIN)) Serial.print(F("begin failed"));
-  if (!SD.begin(CS_PIN)){
-  lcd.setCursor(0,3);
-  lcd.print(F("SD init failed"));
-  }
-   
+
   if (! RTC.isrunning()) {
     //Serial.println(F("RTC is NOT running!"));
   lcd.setCursor(0,3);
@@ -87,10 +91,25 @@ void setup()
     // Set the date and time at compile time
     RTC.adjust(DateTime(__DATE__, __TIME__));
   }
-  // RTC.adjust(DateTime(__DATE__, __TIME__)); //removing "//" to adjust the time
+    // RTC.adjust(DateTime(__DATE__, __TIME__)); //removing "//" to adjust the time
     // The default display shows the date and time
-  int menu=0;
+
+  showWelcome();
+  now=RTC.now();  
+  parse_sd(now);
  }
+
+void showWelcome(){
+  lcd.setCursor(0,0);
+  lcd.print(F("Gong Timer for"));
+  lcd.setCursor(0,1);
+  lcd.print(F("Vipassana Courses"));
+  lcd.setCursor(0,2);
+  lcd.print(F("Build "));
+  lcd.print(__DATE__);
+  delay(1000);
+  lcd.clear();
+}
 
 int getFreeRam()
 {
@@ -117,7 +136,7 @@ if (gong==0){
   lcd.setCursor(12,3);
   lcd.print(F("GONG OFF"));
   }
-if (gong==1){
+if (gong==1&&manual_gong==0){
   lcd.setCursor(12,3);
   lcd.print(F("GONG ON "));
   }
@@ -128,12 +147,16 @@ if (manual_gong==1){
   lcd.print((MANUAL_GONG_DURATION-(millis()-manual_gong_time))/1000);
   lcd.print(F("       "));
 
-  if ((millis()-manual_gong_time)>MANUAL_GONG_DURATION){
+  if (digitalRead(MANUAL_GONG)==HIGH)
+    manual_gong_debounce=0;
+
+  if (((millis()-manual_gong_time)>MANUAL_GONG_DURATION)||(digitalRead(MANUAL_GONG)==LOW&&manual_gong_debounce==0)){
         manual_gong=0;
         switchgong(0);
         lcd.setCursor(0,3);
-        lcd.print(F("             "));
+        lcd.print(F("                  "));
         parse_sd(now);
+        delay(500);
   }
 }
 
@@ -143,8 +166,9 @@ if (manual_gong==1){
    menu=menu+1;
   }
 
-    if(digitalRead(MANUAL_GONG)==LOW)
+    if(digitalRead(MANUAL_GONG)==LOW&&manual_gong_debounce==0)
   {
+   manual_gong_debounce=1;
    manualgong();
   }
 
@@ -182,7 +206,6 @@ if (manual_gong==1){
     delay(100);
 }
 
-// Interrupt function
 void select(){
      menu=menu+1;
 }
@@ -200,7 +223,18 @@ void manualgong(){
 
 void DisplayDateTime ()
 {
-// We show the current date and time
+// We show the current course, day and time
+
+  lcd.setCursor(0, 0);
+  lcd.print(F("Course: "));
+  current_course=now.year()-2000;
+  lcd.print(course_type[current_course]);
+ 
+  current_day=getcurrentday(now);
+    
+  lcd.setCursor(0,1);
+  lcd.print("Today is day ");
+  lcd.print(current_day);
   
   lcd.setCursor(0, 2);
   if (now.hour()<=9)
@@ -223,6 +257,7 @@ void DisplayDateTime ()
   }
   lcd.print(now.second(), DEC);
 
+  /*
   lcd.print(" ");
   if (now.day()<=9)
   {
@@ -237,22 +272,9 @@ void DisplayDateTime ()
   lcd.print(now.month(), DEC);
   lcd.print("/");
   lcd.print(now.year(), DEC);
+  */
   
   
-  lcd.setCursor(0, 0);
-  lcd.print(F("Course: "));
-  current_course=now.year()-2000;
-  lcd.print(course_type[current_course]);
-  
-  current_day=getcurrentday(now);
-    
-  lcd.setCursor(0,1);
-  lcd.print("Today is day ");
-  lcd.print(current_day);
-/*
-  if (now.second()==0){
-  parse_sd(now);
-  }*/
 }
 
 int getcurrentday(DateTime now){
@@ -432,6 +454,22 @@ void StoreAgg()
 
 void parse_sd(DateTime now) {
 
+SdFat SD;
+File file;
+
+  int i=0;
+  int read_value;
+  unsigned long int time1=millis();
+  //Serial.println(F("Timer Started"));
+
+  // Initialize the SD card
+  //if (!SD.begin(CS_PIN)) Serial.print(F("begin failed"));
+  if (!SD.begin(CS_PIN)){
+  lcd.setCursor(0,3);
+  lcd.print(F("SD init failed"));
+  return;
+  }
+  
   // Open the file.
 
   file = SD.open("timer.csv", FILE_READ);
@@ -440,6 +478,7 @@ void parse_sd(DateTime now) {
   if (!file){
     lcd.setCursor(0,3);
     lcd.print(F("File open fail"));
+    return;
   }
   
   // Rewind the file for read.
@@ -458,13 +497,9 @@ void parse_sd(DateTime now) {
 
   // Read the file and print fields.
  
-  int i=0;
-  int read_value;
-  unsigned long int time1=millis();
-  
-  //Serial.println(F("Timer Started"));
+
   lcd.setCursor(0,3);
-  lcd.print(F("Read SD"));
+  lcd.print(F("Read SD     "));
   
   while (file.available()) {
 
@@ -479,9 +514,24 @@ void parse_sd(DateTime now) {
       }
 
       i++;
-      
+
+      int temp_next_timer_diff;
       if (n == -3||n==10){   //-3 is the int value for \n, sometimes it's 10
-      
+        
+           temp_next_timer_diff=(timer_data[2]*60+timer_data[3])-(now.hour()*60+now.minute());
+           
+           if (temp_next_timer_diff>0){
+
+            if (next_timer_available==0) {
+            next_timer_available=1;
+            //next_timer=timer_data[2]*100+timer_data[3];
+            next_timer_hour=timer_data[2];
+            next_timer_minute=timer_data[3];
+            }
+
+           }
+           else next_timer_available=0;
+                 
       if (timer_data[0]-current_course==0){
         //Serial.println(F("Match Course"));
 
@@ -492,6 +542,7 @@ void parse_sd(DateTime now) {
            // Serial.println(F("Match Hour"));
             if (timer_data[3]-now.minute()==0){
               //Serial.println(F("Match Minute"));
+              
               if (timer_data[4]==1)
                 {
                   if (manual_gong==0) { //switch gong on only if Manual Gong is not already on
@@ -514,9 +565,6 @@ void parse_sd(DateTime now) {
         }
       }
       
-      
-
-      
       i=0; //reset i to zero for new line
       
     }
@@ -527,6 +575,24 @@ void parse_sd(DateTime now) {
   unsigned long int time_taken=time2-time1;
   //Serial.print(F("Time taken is "));
   //Serial.println(time_taken);
+  lcd.setCursor(10,2);
+
+        if (next_timer_available){
+          lcd.print(F("Next "));
+            if (next_timer_hour<=9){
+            lcd.print("0");          
+            }
+           lcd.print(next_timer_hour);
+           lcd.print(F(":"));
+             if (next_timer_minute<=9){
+            lcd.print("0");          
+            }
+            lcd.print(next_timer_minute);
+            
+      }
+      else 
+        lcd.print(F("No next tmr"));
+    
   lcd.setCursor(0,3);
   lcd.print(time_taken);
   lcd.print(F(" ms   "));
