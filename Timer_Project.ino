@@ -5,9 +5,6 @@
 #include <limits.h>
 #include <SPI.h>
 
-// next line for SD.h
-//#include <SD.h>
-
 // next two lines for SdFat
 #include <SdFat.h>
 SdFat SD;
@@ -17,7 +14,7 @@ unsigned char relayPin = 5;
 bool gong;
 bool manual_gong;
 bool is_clock_adjusted;
-unsigned int manual_gong_time;
+unsigned long manual_gong_time;
 #define MANUAL_GONG_DURATION 10000 //miliseconds for Manual Gong
 
 File file;
@@ -31,31 +28,23 @@ RTC_DS1307 RTC;
 /* Define an array of all available courses, as well as the length for each course type */
 
 char course_type[ARRAYSIZE][20]=
-{   "Between Course",
+{   "Between Crs",
     "10-Day",
     "3-Day",
     "1-Day",
     "Satipatthana"
 };
 
-int course_length[ARRAYSIZE] = {1,12,5,1,10};
+int course_length[ARRAYSIZE] = {1,12,4,1,10};
 
 int current_day=0;
 int current_course=0;
 
 //************Button*****************//
-int P1=6; // Button SET MENU'
-int P2=7; // Button +
-int P3=8; // Button -
-int P4=2; // manual Gong
-
-/*
-// Interrupt 0 is hardware pin 4 (digital pin 2)
-int btnselect = 0;
-
-// Interrupt 1 is hardware pin 5 (digital pin 3)
-int btnmanualgong = 1;
-*/
+int SELECT=6; // Button SET MENU'
+int UP=7; // Button +
+int DOWN=8; // Button -
+int MANUAL_GONG=9; // manual gong
 
 //************Variables**************//
 int hourupg;
@@ -65,35 +54,36 @@ int menu =0;
 
 int timer_data[5];
 
+DateTime now;
+
 void setup()
 {
-/*
-  attachInterrupt(btnselect , select, RISING);
-  attachInterrupt(btnmanualgong, manualgong, RISING);
-*/
 
   pinMode(relayPin,OUTPUT);
+  pinMode(SELECT,INPUT_PULLUP);
+  pinMode(UP,INPUT_PULLUP);
+  pinMode(DOWN,INPUT_PULLUP);
+  pinMode(MANUAL_GONG,INPUT_PULLUP);
   
   lcd.init();
   lcd.backlight();
   lcd.clear();
 
-  pinMode(P1,INPUT); //replaced by interrupt 0
-  pinMode(P2,INPUT);
-  pinMode(P3,INPUT);
-  pinMode(P4,INPUT);
-
   Serial.begin(9600);
   Wire.begin();
   RTC.begin();
    
-  //Serial.print(F("Program started\n"));
-
   // Initialize the SD card
-  if (!SD.begin(CS_PIN)) Serial.print(F("begin failed"));
+  //if (!SD.begin(CS_PIN)) Serial.print(F("begin failed"));
+  if (!SD.begin(CS_PIN)){
+  lcd.setCursor(0,3);
+  lcd.print(F("SD init failed"));
+  }
    
   if (! RTC.isrunning()) {
-    Serial.println(F("RTC is NOT running!"));
+    //Serial.println(F("RTC is NOT running!"));
+  lcd.setCursor(0,3);
+  lcd.print(F("RTC not runng!"));
     // Set the date and time at compile time
     RTC.adjust(DateTime(__DATE__, __TIME__));
   }
@@ -101,40 +91,59 @@ void setup()
     // The default display shows the date and time
   int menu=0;
  }
- 
+
+int getFreeRam()
+{
+  extern int __heap_start, *__brkval; 
+  int v;
+
+  v = (int) &v - (__brkval == 0 ? (int) &__heap_start : (int) __brkval);
+  return v;
+}
+
 void loop()
 { 
 
+lcd.setCursor(15,1);
+lcd.print(getFreeRam(),DEC);
+
+now = RTC.now();
+
+if (now.second()==0){
+  parse_sd(now); //read from SD card
+}
+
 if (gong==0){
   lcd.setCursor(12,3);
-  lcd.print("GONG OFF");
+  lcd.print(F("GONG OFF"));
   }
 if (gong==1){
   lcd.setCursor(12,3);
-  lcd.print("GONG ON ");
+  lcd.print(F("GONG ON "));
   }
 
 if (manual_gong==1){
   lcd.setCursor(0,3);
-  lcd.print("Manual Gong: ");
+  lcd.print(F("Manual Gong: "));
   lcd.print((MANUAL_GONG_DURATION-(millis()-manual_gong_time))/1000);
-  lcd.print("       ");
-  
+  lcd.print(F("       "));
+
   if ((millis()-manual_gong_time)>MANUAL_GONG_DURATION){
         manual_gong=0;
         switchgong(0);
         lcd.setCursor(0,3);
-        lcd.print("             ");
+        lcd.print(F("             "));
+        parse_sd(now);
   }
 }
 
 // check if you press the SET button and increase the menu index
-  if(digitalRead(P1)) // replaced by interrupt 0
+  if(digitalRead(SELECT)==LOW)
   {
    menu=menu+1;
   }
 
-    if(digitalRead(P4)) // replaced by interrupt 0
+    if(digitalRead(MANUAL_GONG)==LOW)
   {
    manualgong();
   }
@@ -168,14 +177,13 @@ if (manual_gong==1){
     StoreAgg(); 
     delay(500);
     menu=0;
-    switchgong(0);
+    parse_sd(now);
     }
     delay(100);
 }
 
 // Interrupt function
 void select(){
-  Serial.print(F("Select Pressed\n"));
      menu=menu+1;
 }
 
@@ -188,17 +196,13 @@ void manualgong(){
   manual_gong_time=millis();
   manual_gong=1;
   switchgong(1);
- 
 }
 
 void DisplayDateTime ()
 {
 // We show the current date and time
   
-  DateTime now = RTC.now();
-
   lcd.setCursor(0, 2);
-  //lcd.print("Hour:");
   if (now.hour()<=9)
   {
     lcd.print("0");
@@ -219,11 +223,6 @@ void DisplayDateTime ()
   }
   lcd.print(now.second(), DEC);
 
-/*
-  lcd.setCursor(0, 0);
-  
-  lcd.print("Date: ");
-*/
   lcd.print(" ");
   if (now.day()<=9)
   {
@@ -241,7 +240,7 @@ void DisplayDateTime ()
   
   
   lcd.setCursor(0, 0);
-  lcd.print("Course: ");
+  lcd.print(F("Course: "));
   current_course=now.year()-2000;
   lcd.print(course_type[current_course]);
   
@@ -250,9 +249,10 @@ void DisplayDateTime ()
   lcd.setCursor(0,1);
   lcd.print("Today is day ");
   lcd.print(current_day);
-  
+/*
+  if (now.second()==0){
   parse_sd(now);
-  
+  }*/
 }
 
 int getcurrentday(DateTime now){
@@ -269,14 +269,13 @@ int getcurrentday(DateTime now){
     return 0; // set to day 0
       }
    else return current_day_tmp;
-  
 }
 
 void DisplaySetHour()
 {
 // time setting
   lcd.clear();
-  if(digitalRead(P2)==HIGH)
+  if(digitalRead(UP)==LOW)
   {
     is_clock_adjusted = 1;
     if(hourupg==23)
@@ -288,7 +287,7 @@ void DisplaySetHour()
       hourupg=hourupg+1;
     }
   }
-   if(digitalRead(P3)==HIGH)
+   if(digitalRead(DOWN)==LOW)
   {
     is_clock_adjusted = 1;
     if(hourupg==0)
@@ -301,7 +300,7 @@ void DisplaySetHour()
     }
   }
   lcd.setCursor(0,0);
-  lcd.print("Set time:");
+  lcd.print(F("Set hour:"));
   lcd.setCursor(0,1);
   lcd.print(hourupg,DEC);
   delay(200);
@@ -311,7 +310,7 @@ void DisplaySetMinute()
 {
 // Setting the minutes
   lcd.clear();
-  if(digitalRead(P2)==HIGH)
+  if(digitalRead(UP)==LOW)
   {
     is_clock_adjusted = 1;
     
@@ -324,7 +323,7 @@ void DisplaySetMinute()
       minupg=minupg+1;
     }
   }
-   if(digitalRead(P3)==HIGH)
+   if(digitalRead(DOWN)==LOW)
   {
      is_clock_adjusted = 1;
     if (minupg==0)
@@ -337,7 +336,7 @@ void DisplaySetMinute()
     }
   }
   lcd.setCursor(0,0);
-  lcd.print("Set Minutes:");
+  lcd.print(F("Set Minutes:"));
   lcd.setCursor(0,1);
   lcd.print(minupg,DEC);
   delay(200);
@@ -346,20 +345,16 @@ void DisplaySetMinute()
 void DisplaySetCourseType()
 {
 // setting the course type
-  //current_course=0; //not sure why, if we didn't set this, the variable will be 19
-  
-   Serial.print(F("Current course is "));
-   Serial.println(current_course);
    
   lcd.clear();
-  if(digitalRead(P2)==HIGH)
+  if(digitalRead(UP)==LOW)
   {    
     current_course=current_course+1;
 
     if (current_course>ARRAYSIZE-1)
       current_course=0;
   }
-   if(digitalRead(P3)==HIGH)
+   if(digitalRead(DOWN)==LOW)
   {
     current_course=current_course-1;
     
@@ -368,7 +363,7 @@ void DisplaySetCourseType()
   }
   
   lcd.setCursor(0,0);
-  lcd.print("Set Course Type");
+  lcd.print(F("Set Course Type"));
   lcd.setCursor(0,1);
   lcd.print(course_type[current_course]);
   delay(200);
@@ -378,7 +373,7 @@ void DisplaySetDay()
 {
 // Setting the day
   lcd.clear();
-  if(digitalRead(P2)==HIGH)
+  if(digitalRead(UP)==LOW)
   {
     current_day=current_day+1;
     if (current_day>course_length[current_course]-1)
@@ -387,7 +382,7 @@ void DisplaySetDay()
     }
 
   }
-   if(digitalRead(P3)==HIGH)
+   if(digitalRead(DOWN)==LOW)
   {
     current_day=current_day-1;
     if (current_day<0)
@@ -397,7 +392,7 @@ void DisplaySetDay()
     
   }
   lcd.setCursor(0,0);
-  lcd.print("Set Day:");
+  lcd.print(F("Set Day:"));
   lcd.setCursor(0,1);
   lcd.print(current_day,DEC);
   delay(200);
@@ -407,27 +402,31 @@ void StoreAgg()
 {
 // Variable saving
   int tmpmonth=1;
+  int tmpday=1;
   lcd.clear();
   lcd.setCursor(0,0);
-  lcd.print("SAVING IN");
+  lcd.print(F("SAVING IN"));
   lcd.setCursor(0,1);
-  lcd.print("PROGRESS");
+  lcd.print(F("PROGRESS"));
 
   if (current_day>30) {
     tmpmonth++;
-    current_day=current_day-30; //double-check this logic. January has 31 days
+    tmpday=current_day%30;  //OK until 45 days course. For 60 days course, this logic doesn't work
   }
   else {
-  current_day = current_day+1;
+  tmpday = current_day+1;
   }
   
   if (is_clock_adjusted ==1) {
-    RTC.adjust(DateTime(current_course,tmpmonth,current_day,hourupg,minupg,0));
+    RTC.adjust(DateTime(current_course,tmpmonth,tmpday,hourupg,minupg,0));
     is_clock_adjusted=0;
   }
   else {
-  RTC.adjustbrief(DateTime(current_course,tmpmonth,current_day,hourupg,minupg,0));
+  RTC.adjustbrief(DateTime(current_course,tmpmonth,tmpday,hourupg,minupg,0));
   }
+
+  now=RTC.now();
+  
   delay(200);
 }
 
@@ -435,22 +434,38 @@ void parse_sd(DateTime now) {
 
   // Open the file.
 
-  file = SD.open("timer.txt", FILE_READ);
-  if (!file) Serial.print(F("open failed"));
+  file = SD.open("timer.csv", FILE_READ);
+  //if (!file) Serial.print(F("open failed"));
+
+  if (!file){
+    lcd.setCursor(0,3);
+    lcd.print(F("File open fail"));
+  }
   
   // Rewind the file for read.
   file.seek(0);
 
   int n;      // Length of returned field with delimiter.
 
+  Serial.print(F("Current course is "));
+  Serial.println(current_course);
+  Serial.print(F("Current day is "));
+  Serial.println(current_day);
+  Serial.print(F("Hour is "));
+  Serial.println(now.hour());
+  Serial.print(F("Minute is "));
+  Serial.println(now.minute());
+
   // Read the file and print fields.
  
   int i=0;
   int read_value;
-  int time1=millis();
+  unsigned long int time1=millis();
   
-  Serial.println(F("Timer Started"));
-
+  //Serial.println(F("Timer Started"));
+  lcd.setCursor(0,3);
+  lcd.print(F("Read SD"));
+  
   while (file.available()) {
 
        
@@ -458,8 +473,6 @@ void parse_sd(DateTime now) {
 
     //done if Error or at EOF.
     if (n == 0) break;
-      //Serial.print(F("n is "));
-      //Serial.println(n);
       
       if (n == 44){   //44 is the int value for a comma
             timer_data[i] = read_value;
@@ -468,31 +481,6 @@ void parse_sd(DateTime now) {
       i++;
       
       if (n == -3||n==10){   //-3 is the int value for \n, sometimes it's 10
-
-      /*
-      Serial.print(F("timer_data[0] is "));
-      Serial.println(timer_data[0]);
-      Serial.print(F("timer_data[1] is "));
-      Serial.println(timer_data[1]);
-      Serial.print(F("timer_data[2] is "));
-      Serial.println(timer_data[2]);
-      Serial.print(F("timer_data[3] is "));
-      Serial.println(timer_data[3]);
-      Serial.print(F("timer_data[4] is "));
-      Serial.println(timer_data[4]);
-      Serial.println(F("--------")); 
-      */
-      /*
-      
-      Serial.print(F("Course type is  "));
-      Serial.println(current_course);
-      Serial.print(F("Course day is  "));
-      Serial.println(current_day);
-      Serial.print(F("Hour is "));
-      Serial.println(now.hour());
-      Serial.print(F("Minute is "));
-      Serial.println(now.minute());
-      */
       
       if (timer_data[0]-current_course==0){
         //Serial.println(F("Match Course"));
@@ -506,14 +494,6 @@ void parse_sd(DateTime now) {
               //Serial.println(F("Match Minute"));
               if (timer_data[4]==1)
                 {
-                  Serial.print(F("Course "));
-                  Serial.print(current_course);
-                  Serial.print(F(",Day "));
-                  Serial.print(current_day);
-                  Serial.print(F(",Hour "));
-                  Serial.print(timer_data[2]);
-                  Serial.print(F(",Minute "));
-                  Serial.println(timer_data[3]);
                   if (manual_gong==0) { //switch gong on only if Manual Gong is not already on
                   Serial.println(F("Gong On"));
                   switchgong(1);
@@ -522,14 +502,6 @@ void parse_sd(DateTime now) {
                 }
               if (timer_data[4]==0)
                 {
-                  Serial.print(F("Course "));
-                  Serial.println(current_course);
-                  Serial.print(F("Day "));
-                  Serial.println(current_day);
-                  Serial.print(F("Hour "));
-                  Serial.println(timer_data[2]);
-                  Serial.print(F("Minute "));
-                  Serial.println(timer_data[3]);
                   if (manual_gong==0){
                   Serial.println(F("Gong OFF")); //switch gong off only if Manul Gong is not active
                   switchgong(0);
@@ -551,10 +523,13 @@ void parse_sd(DateTime now) {
 
   }
   
-  int time2=millis();
-  int time_taken=time2-time1;
-  Serial.print(F("Time taken is "));
-  Serial.println(time_taken);
+  unsigned long int time2=millis();
+  unsigned long int time_taken=time2-time1;
+  //Serial.print(F("Time taken is "));
+  //Serial.println(time_taken);
+  lcd.setCursor(0,3);
+  lcd.print(time_taken);
+  lcd.print(F(" ms   "));
  file.close();
   
 }
