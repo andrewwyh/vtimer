@@ -558,6 +558,8 @@ unsigned long int time1=millis(); //this variable counts how much time is needed
   lcd.setCursor(0,3);
   lcd.print(F("Read SD     "));
   
+  next_timer_available=0; //Reset Next Timer available before reading a fresh file
+  
   while (file.available()) {
 
     n = csvReadInt16(&file, &read_value, ','); //reads one variable until we hit a comma
