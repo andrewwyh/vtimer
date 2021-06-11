@@ -5,7 +5,7 @@
 #include <SPI.h>
 #include <SdFat.h>
 
-#define SERIAL_DEBUG  // uncomment for Serial debug
+//#define SERIAL_DEBUG  // uncomment for Serial debug
 //define DEBUG_ON //uncomment for memory and SD read times
 
 #define MANUAL_GONG_DURATION 60000 //miliseconds for Manual Gong
