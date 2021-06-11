@@ -13,30 +13,32 @@
 /* Define an array of all available courses, as well as the length for each course type */
 /* this part includes 20 days
 
-#define ARRAYSIZE 6 //how many courses are defined.
+#define ARRAYSIZE 7 //how many courses are defined.
 
 char course_type[ARRAYSIZE][20]=
 {   "Between Crs",
     "10-Day",
     "3-Day",
     "Satipatthana",
+    "1-Day",
     "20-Day",
     "30-Day",
 };
 
-int course_length[ARRAYSIZE] = {1,12,4,10,22,32};
+int course_length[ARRAYSIZE] = {1,12,4,10,1,22,32};
 */
 
-#define ARRAYSIZE 4  //how many courses are defined.
+#define ARRAYSIZE 5  //how many courses are defined.
 
 char course_type[ARRAYSIZE][20]=
 {   "Between Crs",
     "10-Day",
     "3-Day",
     "Satipatthana",
+    "1-Day"
 };
 
-int course_length[ARRAYSIZE] = {1,12,4,10};
+int course_length[ARRAYSIZE] = {1,12,4,10,1};
 
 
 /* From here on, it's all constants
