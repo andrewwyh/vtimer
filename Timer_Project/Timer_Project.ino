@@ -6,7 +6,7 @@
 #include <SdFat.h>
 
 //#define SERIAL_DEBUG  // uncomment for Serial debug
-//define DEBUG_ON //uncomment for memory and SD read times
+//#define DEBUG_ON //uncomment for memory and SD read times
 
 #define MANUAL_GONG_DURATION 60000 //miliseconds for Manual Gong
 
@@ -51,12 +51,12 @@ DateTime now;
 
 /* The Pins connected to which buttons and relay */
 
-#define relayPin 5 // the relay D1 is connected to this pin
-#define CS_PIN 4  //this is the pin used for CS from SD card
-#define SELECT 6 // Button SET MENU'
-#define UP 7 // Button +
-#define DOWN 8 // Button -
-#define MANUAL_GONG 9 // manual gong
+#define relayPin 5 // the relay D1 is connected to this pin D5
+#define CS_PIN 4  //this is the pin used for CS from SD card D4
+#define SELECT 6 // Button SET MENU', D6
+#define UP 7 // Button +, D7
+#define DOWN 8 // Button -, D8
+#define MANUAL_GONG 9 // manual gong, D9
 
 bool gong;         //whether gong is on or off
 bool manual_gong;  //whether manual gong is on or off
@@ -362,6 +362,8 @@ void DisplaySetDay()
   }
   lcd.setCursor(0,0);
   lcd.print(F("Set Day:"));
+    if (current_day>course_length[current_course]-1)
+      current_day=0;
   lcd.setCursor(0,1);
   lcd.print(current_day,DEC);
   delay(200);
