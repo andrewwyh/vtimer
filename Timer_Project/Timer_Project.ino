@@ -8,7 +8,7 @@
 //#define SERIAL_DEBUG  // uncomment for Serial debug
 //#define DEBUG_ON //uncomment for memory and SD read times
 
-#define MANUAL_GONG_DURATION 60000 //miliseconds for Manual Gong
+#define MANUAL_GONG_DURATION 120000 //miliseconds for Manual Gong
 
 /* Define an array of all available courses, as well as the length for each course type */
 /* this part includes 20 days
