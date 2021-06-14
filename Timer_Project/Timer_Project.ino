@@ -153,7 +153,7 @@ lcd.print(getFreeRam(),DEC);
 /* Updates the time with every loop */
 now = RTC.now();
 
-/* Prints the "GONG ON" or "GONG OFF" no the LCD */
+/* Prints the "GONG ON" or "GONG OFF" on the LCD */
 if (gong==0){
   lcd.setCursor(12,3);
   lcd.print(F("GONG OFF"));
@@ -279,8 +279,13 @@ void DisplayDateTime ()
   current_day=getcurrentday(now);
     
   lcd.setCursor(0,1);
-  lcd.print("Today is day ");
-  lcd.print(current_day);
+    if (course_length[current_course]==1)
+      lcd.print("              ");
+
+    else {
+      lcd.print("Today is day ");
+      lcd.print(current_day);
+    }
   
   lcd.setCursor(0, 2);
   if (now.hour()<=9)
