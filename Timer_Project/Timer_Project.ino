@@ -5,38 +5,40 @@
 #include <SPI.h>
 #include <SdFat.h>
 
-#define SERIAL_DEBUG  // uncomment for Serial debug
-//define DEBUG_ON //uncomment for memory and SD read times
+//#define SERIAL_DEBUG  // uncomment for Serial debug
+//#define DEBUG_ON //uncomment for memory and SD read times
 
 #define MANUAL_GONG_DURATION 60000 //miliseconds for Manual Gong
 
 /* Define an array of all available courses, as well as the length for each course type */
 /* this part includes 20 days
 
-#define ARRAYSIZE 6 //how many courses are defined.
+#define ARRAYSIZE 7 //how many courses are defined.
 
 char course_type[ARRAYSIZE][20]=
 {   "Between Crs",
     "10-Day",
     "3-Day",
     "Satipatthana",
+    "1-Day",
     "20-Day",
     "30-Day",
 };
 
-int course_length[ARRAYSIZE] = {1,12,4,10,22,32};
+int course_length[ARRAYSIZE] = {1,12,4,10,1,22,32};
 */
 
-#define ARRAYSIZE 4  //how many courses are defined.
+#define ARRAYSIZE 5  //how many courses are defined.
 
 char course_type[ARRAYSIZE][20]=
 {   "Between Crs",
     "10-Day",
     "3-Day",
     "Satipatthana",
+    "1-Day"
 };
 
-int course_length[ARRAYSIZE] = {1,12,4,10};
+int course_length[ARRAYSIZE] = {1,12,4,10,1};
 
 
 /* From here on, it's all constants
@@ -49,12 +51,12 @@ DateTime now;
 
 /* The Pins connected to which buttons and relay */
 
-#define relayPin 5 // the relay D1 is connected to this pin
-#define CS_PIN 4  //this is the pin used for CS from SD card
-#define SELECT 6 // Button SET MENU'
-#define UP 7 // Button +
-#define DOWN 8 // Button -
-#define MANUAL_GONG 9 // manual gong
+#define relayPin 5 // the relay D1 is connected to this pin D5
+#define CS_PIN 4  //this is the pin used for CS from SD card D4
+#define SELECT 6 // Button SET MENU', D6
+#define UP 7 // Button +, D7
+#define DOWN 8 // Button -, D8
+#define MANUAL_GONG 9 // manual gong, D9
 
 bool gong;         //whether gong is on or off
 bool manual_gong;  //whether manual gong is on or off
@@ -151,7 +153,7 @@ lcd.print(getFreeRam(),DEC);
 /* Updates the time with every loop */
 now = RTC.now();
 
-/* Prints the "GONG ON" or "GONG OFF" no the LCD */
+/* Prints the "GONG ON" or "GONG OFF" on the LCD */
 if (gong==0){
   lcd.setCursor(12,3);
   lcd.print(F("GONG OFF"));
@@ -277,8 +279,13 @@ void DisplayDateTime ()
   current_day=getcurrentday(now);
     
   lcd.setCursor(0,1);
-  lcd.print("Today is day ");
-  lcd.print(current_day);
+    if (course_length[current_course]==1)
+      lcd.print("              ");
+
+    else {
+      lcd.print("Today is day ");
+      lcd.print(current_day);
+    }
   
   lcd.setCursor(0, 2);
   if (now.hour()<=9)
@@ -355,6 +362,8 @@ void DisplaySetDay()
   }
   lcd.setCursor(0,0);
   lcd.print(F("Set Day:"));
+    if (current_day>course_length[current_course]-1)
+      current_day=0;
   lcd.setCursor(0,1);
   lcd.print(current_day,DEC);
   delay(200);
@@ -555,6 +564,8 @@ unsigned long int time1=millis(); //this variable counts how much time is needed
  
   lcd.setCursor(0,3);
   lcd.print(F("Read SD     "));
+  
+  next_timer_available=0; //Reset Next Timer available before reading a fresh file
   
   while (file.available()) {
 

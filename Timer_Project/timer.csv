@@ -1,4 +1,4 @@
-99,99,99,99,99,"First column: 0 = between course, 1 = 10 day course, 2 = 3-day course, 3=Satipatthana"
+99,99,99,99,99,"First column: 0 = between course, 1 = 10 day course, 2 = 3-day course, 3=Satipatthana, 4=1-Day"
 99,99,99,99,99,Second column: Day of course
 99,99,99,99,99,Third column: Hour
 99,99,99,99,99,Fourth Column: Minute
@@ -675,3 +675,15 @@
 3,9,19,11,0,Discourse
 3,9,20,30,1,Post-Discourse Instructions
 3,9,20,31,0,Post-Discourse Instructions
+4,0,5,0,1,1-Day Course; Wake up Gong
+4,0,5,2,0,Wake up Gong
+4,0,7,0,1,Breakfast
+4,0,7,1,0,Breakfast
+4,0,11,30,1,Lunch
+4,0,11,31,0,Lunch
+4,0,18,0,1,Light Dinner
+4,0,18,1,0,Light Dinner
+4,0,18,50,1,Orientation
+4,0,18,52,0,Orientation
+4,0,19,50,1,Assemble
+4,0,19,51,0,Assemble
